@@ -35,9 +35,10 @@
     .reveal {
       position: absolute;
       inset: 0;
-      background: center / cover no-repeat url("reveal.png");
-      filter: saturate(1.05) contrast(1.05);
-      transform: translateZ(0);
+      background-image: url("reveal.png");
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
     }
 
     canvas {
