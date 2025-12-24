@@ -1,143 +1,151 @@
-<script>
-  const canvas = document.getElementById("scratch");
-  const ctx = canvas.getContext("2d", { willReadFrequently: false });
-  const card = document.getElementById("card");
-  const hint = document.getElementById("hint");
-  const resetBtn = document.getElementById("resetBtn");
-  const fullBtn = document.getElementById("fullBtn");
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>Cadeau mystique à gratter</title>
 
-  const WRAP_SRC = "wrap.png"; // papier cadeau mystique
-  const BRUSH_RADIUS = 26;     // taille du "grattage" (px en CSS pixels)
-  const FADE_HINT_AFTER = 35;  // après X coups de grattage, on cache l'indication
-
-  let wrapImg = new Image();
-  wrapImg.src = WRAP_SRC;
-
-  let scratching = false;
-  let strokes = 0;
-
-  // DPR unique utilisé partout (évite les décalages)
-  let DPR = 1;
-
-  function fitCanvasToCard() {
-    const rect = card.getBoundingClientRect();
-
-    // Clamp pour éviter des canvas énormes, mais on DOIT réutiliser ce DPR partout
-    DPR = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
-
-    canvas.width = Math.round(rect.width * DPR);
-    canvas.height = Math.round(rect.height * DPR);
-
-    // On dessine en "CSS pixels"
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-
-    drawWrap();
-  }
-
-  function getCanvasSizeCssPixels() {
-    return {
-      w: canvas.width / DPR,
-      h: canvas.height / DPR
-    };
-  }
-
-  function drawWrap() {
-    const { w, h } = getCanvasSizeCssPixels();
-
-    ctx.globalCompositeOperation = "source-over";
-    ctx.clearRect(0, 0, w, h);
-
-    if (!wrapImg.complete) return;
-
-    const iw = wrapImg.naturalWidth;
-    const ih = wrapImg.naturalHeight;
-
-    // "cover" pour remplir tout le carré
-    const scale = Math.max(w / iw, h / ih);
-    const dw = iw * scale;
-    const dh = ih * scale;
-    const dx = (w - dw) / 2;
-    const dy = (h - dh) / 2;
-
-    ctx.drawImage(wrapImg, dx, dy, dw, dh);
-
-    // voile mystique léger
-    const g = ctx.createRadialGradient(w*0.5, h*0.35, 20, w*0.5, h*0.5, Math.max(w,h)*0.7);
-    g.addColorStop(0, "rgba(255,255,255,0.06)");
-    g.addColorStop(1, "rgba(0,0,0,0.00)");
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, w, h);
-
-    strokes = 0;
-    hint.style.opacity = 1;
-  }
-
-  function getPos(e) {
-    const rect = canvas.getBoundingClientRect();
-    let clientX, clientY;
-
-    if (e.touches && e.touches[0]) {
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
-    } else {
-      clientX = e.clientX;
-      clientY = e.clientY;
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #0b0b12;
+      font-family: system-ui, sans-serif;
+      overscroll-behavior: none;
+      touch-action: none;
     }
 
-    return { x: clientX - rect.left, y: clientY - rect.top };
-  }
+    .wrap {
+      height: 100%;
+      display: grid;
+      place-items: center;
+      padding: 14px;
+      box-sizing: border-box;
+    }
 
-  function scratchAt(x, y) {
-    ctx.globalCompositeOperation = "destination-out";
-    ctx.beginPath();
-    ctx.arc(x, y, BRUSH_RADIUS, 0, Math.PI * 2);
-    ctx.fill();
+    .card {
+      width: min(92vw, 420px);
+      aspect-ratio: 1 / 1;
+      position: relative;
+      overflow: hidden;
+      border-radius: 18px;
+      background: #111;
+      box-shadow: 0 20px 60px rgba(0,0,0,.55);
+    }
 
-    strokes++;
-    if (strokes > FADE_HINT_AFTER) hint.style.opacity = 0;
-  }
+    .reveal {
+      position: absolute;
+      inset: 0;
+      background: url("reveal.png") center / cover no-repeat;
+    }
 
-  function start(e) {
-    e.preventDefault();
-    scratching = true;
-    const {x,y} = getPos(e);
-    scratchAt(x,y);
-  }
+    canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
 
-  function move(e) {
-    if (!scratching) return;
-    e.preventDefault();
-    const {x,y} = getPos(e);
-    scratchAt(x,y);
-  }
+    .hint {
+      position: absolute;
+      bottom: 12px;
+      left: 12px;
+      right: 12px;
+      padding: 10px;
+      border-radius: 14px;
+      background: rgba(0,0,0,.4);
+      color: #fff;
+      text-align: center;
+      font-size: 14px;
+      pointer-events: none;
+    }
+  </style>
+</head>
 
-  function end() {
-    scratching = false;
-  }
+<body>
+  <div class="wrap">
+    <div class="card" id="card">
+      <div class="reveal"></div>
+      <canvas id="scratch"></canvas>
+      <div class="hint" id="hint">Gratte avec ton doigt ✨</div>
+    </div>
+  </div>
 
-  // Touch (mobile)
-  canvas.addEventListener("touchstart", start, { passive: false });
-  canvas.addEventListener("touchmove", move, { passive: false });
-  canvas.addEventListener("touchend", end, { passive: false });
+  <script>
+    const canvas = document.getElementById("scratch");
+    const ctx = canvas.getContext("2d");
+    const card = document.getElementById("card");
+    const hint = document.getElementById("hint");
 
-  // Mouse (PC)
-  canvas.addEventListener("mousedown", start);
-  window.addEventListener("mousemove", move);
-  window.addEventListener("mouseup", end);
+    const wrapImg = new Image();
+    wrapImg.src = "wrap.png";
 
-  resetBtn.addEventListener("click", () => drawWrap());
+    const BRUSH_RADIUS = 28;
+    let scratching = false;
 
-  fullBtn.addEventListener("click", () => {
-    const { w, h } = getCanvasSizeCssPixels();
-    ctx.globalCompositeOperation = "destination-out";
-    ctx.fillRect(0, 0, w, h);
-    hint.style.opacity = 0;
-  });
+    function resize() {
+      const r = card.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
 
-  wrapImg.onload = () => fitCanvasToCard();
-  window.addEventListener("resize", fitCanvasToCard);
-  window.addEventListener("orientationchange", fitCanvasToCard);
+      canvas.width  = r.width  * dpr;
+      canvas.height = r.height * dpr;
+      canvas.style.width  = r.width  + "px";
+      canvas.style.height = r.height + "px";
 
-  if (wrapImg.complete) fitCanvasToCard();
-</script>
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      drawWrap();
+    }
+
+    function drawWrap() {
+      if (!wrapImg.complete) return;
+
+      const w = canvas.width / (window.devicePixelRatio || 1);
+      const h = canvas.height / (window.devicePixelRatio || 1);
+
+      ctx.globalCompositeOperation = "source-over";
+      ctx.clearRect(0, 0, w, h);
+
+      const scale = Math.max(w / wrapImg.width, h / wrapImg.height);
+      const dw = wrapImg.width * scale;
+      const dh = wrapImg.height * scale;
+
+      ctx.drawImage(
+        wrapImg,
+        (w - dw) / 2,
+        (h - dh) / 2,
+        dw,
+        dh
+      );
+    }
+
+    function getPos(e) {
+      const r = canvas.getBoundingClientRect();
+      const x = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
+      const y = (e.touches ? e.touches[0].clientY : e.clientY) - r.top;
+      return { x, y };
+    }
+
+    function scratch(e) {
+      const { x, y } = getPos(e);
+      ctx.globalCompositeOperation = "destination-out";
+      ctx.beginPath();
+      ctx.arc(x, y, BRUSH_RADIUS, 0, Math.PI * 2);
+      ctx.fill();
+      hint.style.opacity = 0;
+    }
+
+    canvas.addEventListener("touchstart", e => { scratching = true; scratch(e); }, { passive:false });
+    canvas.addEventListener("touchmove",  e => { if (scratching) scratch(e); }, { passive:false });
+    canvas.addEventListener("touchend",   () => scratching = false);
+
+    canvas.addEventListener("mousedown", e => { scratching = true; scratch(e); });
+    window.addEventListener("mousemove", e => { if (scratching) scratch(e); });
+    window.addEventListener("mouseup",   () => scratching = false);
+
+    wrapImg.onload = resize;
+    window.addEventListener("resize", resize);
+  </script>
+</body>
+</html>
+
 
